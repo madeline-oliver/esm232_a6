@@ -1,0 +1,73 @@
+---
+title: "Assignemnt 6"
+author: "Ruben Sanchez Ramirez, Madeline Oliver, Atefeh Mohseni"
+date: "May 9, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+```{r}
+
+# Attach packages:
+library(tidyverse)
+library(deSolve)
+library(sensitivity)
+library(ggplot2)
+
+```
+
+```{r}
+
+# call the function
+source("./forest_growth.R")
+
+```
+
+```{r}
+
+# set parameters
+years = seq(from=1, to=300, by=1)
+initial_C = 10
+thresh = 50
+K = 250
+r = 0.01
+g = 2
+
+# create parameter list
+parms = list(thresh = thresh, K=K, r=r, g=g)
+
+# run ODE solver for the equation using the given parameters
+result = ode(y=initial_C, time=years, func=forest_growth, parms=parms)
+
+# change the column names
+colnames(result)=c("year","C")
+# view the results
+head(result)
+# turn it into a data frame
+result = as.data.frame(result)
+
+```
+
+```{r}
+
+# Plot the results:
+plot.a6.1 <- result %>% 
+  ggplot(aes(year, C))+
+  geom_point()+
+  theme_classic()+
+  labs(x = "Years",
+       y = "Forest Size in Units of Carbon (C)") +
+  theme(text = element_text(family = "serif"),
+        axis.title.x = element_text(size=12, face="bold"),
+        axis.title.y = element_text(size=12, face="bold"),
+        axis.text.x = element_text(size=8),
+        axis.text.y = element_text(size=8))
+
+# call the plot
+plot.a6.1
+
+```
