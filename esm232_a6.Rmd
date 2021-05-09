@@ -6,15 +6,14 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
 
 library(tidyverse)
 library(deSolve)
 library(sensitivity)
+library(tinytex)
 ```
 
 # Model of forest growth (where forest size in measured in units of carbon (C))
@@ -35,7 +34,7 @@ The size of the forest (C), Canopy closure threshold and carrying capacity are a
 
 # Run model for 300 years (using the ODE solver) starting with an initial forest size of 10 kg/C and using the following parameters:
 
-* canopy closure threshold = 50 kgC 
+* canopy closure threshold (thresh)  = 50 kgC 
 
 * K = 250 kg C (carrying capacity) 
 
@@ -49,9 +48,8 @@ The size of the forest (C), Canopy closure threshold and carrying capacity are a
 source("forest_growth.R")
 
 # set parameters
-
 years = seq(from=1, to=300, by=1)
-initial_forest = 10
+initial_c = 10
 thresh = 50
 K = 250
 r = 0.01
@@ -61,19 +59,149 @@ g = 2
 parms = list(thresh = thresh, K=K, r=r, g=g)
 
 # run ODE 
-results = ode(y=initial_forest, 
+result = ode(y=initial_c, 
               time=years, 
               func=forest_growth, 
               parms=parms)
 
-colnames(results)=c("year","forest_size")
-head(results)
+result = as.data.frame(result)
 
-# graph results
-ggplot(as.data.frame(results), aes(year,forest_size))+
+colnames(result)=c("year","forest_size")
+head(result)
+
+# graph result
+ggplot(result, aes(year,forest_size))+
   geom_point()+
   labs(y="Forest Carbon", "Years")
 
 ```
+
+# Sobol sensitivity analysis 
+
+Our sobol sensitivity analysis explores how estimated max and mean forest size (C) varies with the: 
+
+* pre canopy closure growth rate(C) 
+
+* post-canopy closure growth rate (g) 
+
+* canopy closure thresholds (thresh)
+
+* carrying capacity (K)
+
+Assume all parameters are normally distributed with means as given in previous section and standard deviation of 10% of mean value
+
+```{r}
+# set number of paramenters
+np = 1000
+
+# create two sets of sample parameters
+thresh = rnorm(mean = 50, sd = .01*50, n = np)
+K = rnorm(mean = 250, sd = .01*250, n = np) 
+r = rnorm(mean = 0.01, sd = .01*.01, n = np)
+g = rnorm(mean = 2, sd = .01*2, n = np)
+x1 = cbind.data.frame(thresh=thresh, 
+                      K=K, 
+                      r=r, 
+                      g=g)
+
+# repeat to get second set of samples
+thresh = rnorm(mean = 50, sd = .01*50, n = np)
+K = rnorm(mean = 250, sd = .01*250, n = np) 
+r = rnorm(mean = 0.01, sd = .01*.01, n = np)
+g = rnorm(mean = 2, sd = .01*2, n = np)
+x2 = cbind.data.frame(thresh=thresh, 
+                      K=K, 
+                      r=r, 
+                      g=g)
+
+# create sobol object and get sets of parameters for running the model
+
+sens_c = soboljansen(model = NULL, x1, x2, nboot = 300)
+
+# our parameter sets are:
+head(sens_c$X)
+
+# get results for 300 years, evaluating every year
+simtimes = seq(from=1, to=300)
+parms = list(thresh=sens_c$X$thresh[1], K=sens_c$X$K[1], r=sens_c$X$r[1], g=sens_c$X$g[1])
+result = ode(y=initial_c, times=simtimes, func=forest_growth, parms=parms)
+
+head(result)
+colnames(result)=c("time","forest_size")
+# turn it into a data frame
+result = as.data.frame(result)
+
+
+```
+
+
+```{r}
+# compute metrics using a function 
+
+compute_metrics = function(result) {
+  max_c = max(result$forest_size)
+  mean_c = mean(result$forest_size)
+  idx = which.max(result$forest_size)
+  maxyear = result$time[idx]
+return(list(max_c=max_c, mean_c=mean_c, maxyear))}
+
+compute_metrics(result)
+```
+
+
+```{r}
+# apply ode and this function for all our parameters by creating a wrapper function that runs solver and computes metrics and returns results for each parameter
+
+c_wrapper = function(time, initial_c, r, g, thresh, K, func){ 
+    parms = list(thresh=thresh, 
+                 K=K,
+                 r=r,
+                 g=g)
+    result = ode(y=initial_c, 
+                 times=time, 
+                 func=forest_growth, 
+                 parms=parms) 
+    colnames(result)=c("year","forest_size")
+    
+  # get metrics
+  metrics=compute_metrics(as.data.frame(result))
+ 
+   return(metrics)
+}
+```
+
+
+```{r}
+# Use pmap
+
+allresults = sens_c$X %>%
+  pmap(c_wrapper, 
+       time=time, 
+       initial_c=initial_c, 
+       r=r, 
+       g=g, 
+       thresh=thresh,
+       K=K, 
+       func=forest_growth)
+
+```
+
+
+```{r}
+# extract metrics of interest - max and mean forest size
+
+# extract max forest size
+max_c = max(result$forest_size)
+max_c
+
+# extract mean forest size
+mean_c = mean(result$forest_size)
+mean_c
+
+# years required to get to the max forest size
+
+
+```
+
 
 
