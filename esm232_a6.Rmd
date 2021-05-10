@@ -201,6 +201,41 @@ mean_c
 # years required to get to the max forest size
 
 
+
+# extract out results from pmap into a data frame
+allres = allresults %>% map_dfr(`[`,c("year","forest_size"))
+
+
+# create boxplots
+tmp = allres %>% gather(key="metric", value="value")
+ggplot(tmp, aes(metric, value, col=metric))+geom_boxplot()
+```
+
+Compute the sobol indicies for each metric
+
+```{r sen3}
+
+sens_P_year = sensitivity::tell(sens_P,allres$year)
+
+# first-order indices 
+sens_P_year$S
+
+sens_P_year$T
+
+plot(sens_P_year)
+
+
+# create another one for forest size
+sens_P_forest_size = sensitivity::tell(sens_P,allres$forest_size)
+# first-order indices 
+sens_P_forest_size$S
+
+sens_P_forest_size$T
+
+# notice how K is much more imprtant here
+plot(sens_P_forest_size)
+
+
 ```
 
 
